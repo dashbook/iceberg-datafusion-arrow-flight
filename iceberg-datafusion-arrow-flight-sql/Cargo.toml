@@ -1,0 +1,14 @@
+[package]
+name = "iceberg-datafusion-arrow-flight-sql"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arrow-flight.workspace = true
+tonic = "0.10.2"
+log = "0.4.20"
+env_logger = "0.10.1"
+iceberg-datafusion-arrow-flight = { path = "../iceberg-datafusion-arrow-flight/" }
+tokio = "1.35.1"
