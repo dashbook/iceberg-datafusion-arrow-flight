@@ -14,9 +14,14 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+
 use arrow_flight::flight_service_server::FlightServiceServer;
+use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
+use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
 use log::info;
+use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
+use std::{env, sync::Arc};
 use tonic::transport::Server;
 
 /// This example shows how to wrap DataFusion with `FlightSqlService` to support connecting
@@ -36,10 +41,31 @@ use tonic::transport::Server;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let addr = "0.0.0.0:50051".parse()?;
+
+    let catalog_url = env::var("CATALOG_URL")?;
+
+    let bucket = env::var("BUCKET");
+
+    let object_store = match bucket {
+        Ok(bucket) => Arc::new(
+            AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .build()?,
+        ) as Arc<dyn ObjectStore>,
+        Err(_) => Arc::new(InMemory::new()),
+    };
+
+    let catalog_list = Arc::new(
+        IcebergCatalogList::new(Arc::new(
+            SqlCatalogList::new(&catalog_url, object_store).await?,
+        ))
+        .await?,
+    );
     let service = FlightSqlServiceImpl {
         contexts: Default::default(),
         statements: Default::default(),
         results: Default::default(),
+        catalog_list,
     };
     info!("Listening on {addr:?}");
     let svc = FlightServiceServer::new(service);

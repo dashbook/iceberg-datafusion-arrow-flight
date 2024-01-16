@@ -39,8 +39,9 @@ use arrow_flight::{
 };
 use arrow_schema::Schema;
 use dashmap::DashMap;
+use datafusion::catalog::CatalogList;
 use datafusion::logical_expr::LogicalPlan;
-use datafusion::prelude::{DataFrame, ParquetReadOptions, SessionConfig, SessionContext};
+use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
 use futures::{Stream, StreamExt, TryStreamExt};
 use log::info;
 use mimalloc::MiMalloc;
@@ -64,6 +65,7 @@ pub struct FlightSqlServiceImpl {
     pub contexts: Arc<DashMap<String, Arc<SessionContext>>>,
     pub statements: Arc<DashMap<String, LogicalPlan>>,
     pub results: Arc<DashMap<String, Vec<RecordBatch>>>,
+    pub catalog_list: Arc<dyn CatalogList>,
 }
 
 impl FlightSqlServiceImpl {
@@ -72,20 +74,11 @@ impl FlightSqlServiceImpl {
         let session_config = SessionConfig::from_env()
             .map_err(|e| Status::internal(format!("Error building plan: {e}")))?
             .with_information_schema(true);
-        let ctx = Arc::new(SessionContext::new_with_config(session_config));
+        let mut ctx = SessionContext::new_with_config(session_config);
 
-        let testdata = datafusion::test_util::parquet_test_data();
+        ctx.register_catalog_list(self.catalog_list.clone());
 
-        // register parquet file with the execution context
-        ctx.register_parquet(
-            "alltypes_plain",
-            &format!("{testdata}/alltypes_plain.parquet"),
-            ParquetReadOptions::default(),
-        )
-        .await
-        .map_err(|e| status!("Error registering table", e))?;
-
-        self.contexts.insert(uuid.clone(), ctx);
+        self.contexts.insert(uuid.clone(), Arc::new(ctx));
         Ok(uuid)
     }
 
