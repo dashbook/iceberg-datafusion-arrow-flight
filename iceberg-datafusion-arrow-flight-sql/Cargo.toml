@@ -8,10 +8,11 @@ edition = "2021"
 [dependencies]
 arrow-flight.workspace = true
 object_store.workspace = true
+iceberg-rust.workspace = true
+datafusion_iceberg.workspace = true
 tonic = "0.10.2"
 log = "0.4.20"
 env_logger = "0.10.1"
 iceberg-datafusion-arrow-flight = { path = "../iceberg-datafusion-arrow-flight/" }
 tokio = "1.35.1"
 iceberg-catalog-sql = { git = "https://www.github.com/jankaul/iceberg-rust" }
-datafusion_iceberg = { git = "https://www.github.com/jankaul/iceberg-rust" }

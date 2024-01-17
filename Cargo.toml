@@ -15,4 +15,6 @@ arrow = "48.0.1"
 arrow-flight = { version = "48.0.1", features = ["flight-sql-experimental"] }
 arrow-schema = "48.0.1"
 datafusion = "33.0.0"
+iceberg-rust = { git = "https://www.github.com/jankaul/iceberg-rust" }
+datafusion_iceberg = { git = "https://www.github.com/jankaul/iceberg-rust" }
 thiserror = "1.0"

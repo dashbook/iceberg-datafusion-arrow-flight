@@ -39,10 +39,11 @@ use arrow_flight::{
 };
 use arrow_schema::Schema;
 use dashmap::DashMap;
-use datafusion::catalog::CatalogList;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
+use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
 use futures::{Stream, StreamExt, TryStreamExt};
+use iceberg_rust::catalog::CatalogList;
 use log::info;
 use mimalloc::MiMalloc;
 use prost::Message;
@@ -76,7 +77,11 @@ impl FlightSqlServiceImpl {
             .with_information_schema(true);
         let mut ctx = SessionContext::new_with_config(session_config);
 
-        ctx.register_catalog_list(self.catalog_list.clone());
+        ctx.register_catalog_list(Arc::new(
+            IcebergCatalogList::new(self.catalog_list.clone())
+                .await
+                .map_err(|e| Status::internal(format!("Error creating catalogs: {e}")))?,
+        ));
 
         self.contexts.insert(uuid.clone(), Arc::new(ctx));
         Ok(uuid)
@@ -191,7 +196,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         info!("getting results for {handle}");
         let result = self.get_result(&handle)?;
         // if we get an empty result, create an empty schema
-        let (schema, batches) = match result.get(0) {
+        let (schema, batches) = match result.first() {
             None => (Arc::new(Schema::empty()), vec![]),
             Some(batch) => (batch.schema(), result.clone()),
         };
@@ -247,7 +252,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .map_err(|e| status!("Error executing query", e))?;
 
         // if we get an empty result, create an empty schema
-        let schema = match result.get(0) {
+        let schema = match result.first() {
             None => Schema::empty(),
             Some(batch) => (*batch.schema()).clone(),
         };

@@ -16,7 +16,6 @@
 // under the License.
 
 use arrow_flight::flight_service_server::FlightServiceServer;
-use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
 use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
 use log::info;
@@ -40,7 +39,7 @@ use tonic::transport::Server;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let addr = "0.0.0.0:50051".parse()?;
+    let addr = "0.0.0.0:31337".parse()?;
 
     let catalog_url = env::var("CATALOG_URL")?;
 
@@ -55,12 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => Arc::new(InMemory::new()),
     };
 
-    let catalog_list = Arc::new(
-        IcebergCatalogList::new(Arc::new(
-            SqlCatalogList::new(&catalog_url, object_store).await?,
-        ))
-        .await?,
-    );
+    let catalog_list = Arc::new(SqlCatalogList::new(&catalog_url, object_store).await?);
     let service = FlightSqlServiceImpl {
         contexts: Default::default(),
         statements: Default::default(),
