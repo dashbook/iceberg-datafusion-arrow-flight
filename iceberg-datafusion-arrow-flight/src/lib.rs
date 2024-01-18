@@ -187,7 +187,6 @@ impl FlightSqlService for FlightSqlServiceImpl {
         if parts.len() != 2 {
             Err(Status::invalid_argument("Invalid authorization header"))?;
         }
-        dbg!(&username, &password);
         let user = parts[0];
         let pass = parts[1];
         if user != username || pass != password {
