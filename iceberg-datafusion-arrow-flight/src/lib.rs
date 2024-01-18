@@ -38,15 +38,17 @@ use arrow_flight::{
     IpcMessage, SchemaAsIpc, Ticket,
 };
 use arrow_schema::Schema;
+use base64::Engine;
 use dashmap::DashMap;
 use datafusion::logical_expr::LogicalPlan;
 use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
 use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
 use futures::{Stream, StreamExt, TryStreamExt};
 use iceberg_rust::catalog::CatalogList;
-use log::info;
+use log::{debug, info};
 use mimalloc::MiMalloc;
 use prost::Message;
+use std::env;
 use std::pin::Pin;
 use std::sync::Arc;
 use tonic::metadata::MetadataValue;
@@ -147,16 +149,51 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn do_handshake(
         &self,
-        _request: Request<Streaming<HandshakeRequest>>,
+        request: Request<Streaming<HandshakeRequest>>,
     ) -> Result<
         Response<Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send>>>,
         Status,
     > {
-        info!("do_handshake");
-        // no authentication actually takes place here
-        // see Ballista implementation for example of basic auth
-        // in this case, we simply accept the connection and create a new SessionContext
-        // the SessionContext will be re-used within this same connection/session
+        debug!("do_handshake");
+        for md in request.metadata().iter() {
+            debug!("{:?}", md);
+        }
+
+        let basic = "Basic ";
+        let authorization = request
+            .metadata()
+            .get("authorization")
+            .ok_or_else(|| Status::invalid_argument("authorization field not present"))?
+            .to_str()
+            .map_err(|_| Status::invalid_argument("authorization not parsable"))?;
+        if !authorization.starts_with(basic) {
+            Err(Status::invalid_argument(format!(
+                "Auth type not implemented: {authorization}"
+            )))?;
+        }
+
+        let username = env::var("FLIGHT_USER")
+            .map_err(|_| Status::invalid_argument("Environment variable USERNAME not set."))?;
+        let password = env::var("FLIGHT_PASSWORD")
+            .map_err(|_| Status::invalid_argument("Environment variable PASSWORD not set."))?;
+        let bytes = base64::engine::general_purpose::STANDARD_NO_PAD
+            .decode(&authorization[basic.len()..])
+            .map_err(|err| {
+                Status::invalid_argument(format!("Failed to convert base64 to bytes: {err}"))
+            })?;
+        let str = String::from_utf8(bytes)
+            .map_err(|_| Status::invalid_argument("Failed to convert auth bytes to utf8."))?;
+        let parts: Vec<_> = str.split(':').collect();
+        if parts.len() != 2 {
+            Err(Status::invalid_argument("Invalid authorization header"))?;
+        }
+        dbg!(&username, &password);
+        let user = parts[0];
+        let pass = parts[1];
+        if user != username || pass != password {
+            Err(Status::unauthenticated("Invalid credentials!"))?
+        }
+
         let token = self.create_ctx().await?;
 
         let result = HandshakeResponse {

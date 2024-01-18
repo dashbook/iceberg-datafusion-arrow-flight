@@ -21,7 +21,7 @@ use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
 use log::info;
 use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use std::{env, sync::Arc};
-use tonic::transport::Server;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 /// This example shows how to wrap DataFusion with `FlightSqlService` to support connecting
 /// to a standalone DataFusion-based server with a JDBC client, using the open source "JDBC Driver
@@ -44,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let catalog_url = env::var("CATALOG_URL")?;
 
     let bucket = env::var("BUCKET");
+    let cert_domain = env::var("TLS_DOMAIN");
 
     let object_store = match bucket {
         Ok(bucket) => Arc::new(
@@ -64,7 +65,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Listening on {addr:?}");
     let svc = FlightServiceServer::new(service);
 
-    Server::builder().add_service(svc).serve(addr).await?;
+    if let Ok(cert_domain) = cert_domain {
+        let tls = rcgen::generate_simple_self_signed(vec![cert_domain])?;
+
+        let config = ServerTlsConfig::new().identity(Identity::from_pem(
+            tls.serialize_pem()?,
+            tls.serialize_private_key_pem(),
+        ));
+        Server::builder()
+            .tls_config(config)?
+            .add_service(svc)
+            .serve(addr)
+            .await?;
+    } else {
+        Server::builder().add_service(svc).serve(addr).await?;
+    };
 
     Ok(())
 }

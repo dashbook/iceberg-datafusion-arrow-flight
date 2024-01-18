@@ -18,5 +18,6 @@ dashmap = "5.5.3"
 log = "0.4.20"
 mimalloc = "0.1.39"
 prost = "0.12.3"
-tonic = "0.10.2"
+tonic = { version = "0.10.2", features = ["transport", "tls"] }
 uuid = "1.6.1"
+base64 = "0.21.7"

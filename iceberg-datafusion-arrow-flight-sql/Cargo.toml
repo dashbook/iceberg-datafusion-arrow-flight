@@ -16,3 +16,4 @@ env_logger = "0.10.1"
 iceberg-datafusion-arrow-flight = { path = "../iceberg-datafusion-arrow-flight/" }
 tokio = "1.35.1"
 iceberg-catalog-sql = { git = "https://www.github.com/jankaul/iceberg-rust" }
+rcgen = "0.12.0"
