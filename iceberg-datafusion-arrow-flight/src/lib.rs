@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use arrow::array::ArrayRef;
 use arrow::ipc::writer::IpcWriteOptions;
 use arrow::record_batch::RecordBatch;
 use arrow_flight::encode::FlightDataEncoderBuilder;
@@ -37,11 +38,13 @@ use arrow_flight::{
     Action, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse,
     IpcMessage, SchemaAsIpc, Ticket,
 };
-use arrow_schema::Schema;
+use arrow_schema::{DataType, Schema};
 use base64::Engine;
 use dashmap::DashMap;
-use datafusion::logical_expr::LogicalPlan;
+use datafusion::logical_expr::{create_udf, LogicalPlan, Volatility};
+use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
+use datafusion::scalar::ScalarValue;
 use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
 use futures::{Stream, StreamExt, TryStreamExt};
 use iceberg_rust::catalog::CatalogList;
@@ -84,6 +87,16 @@ impl FlightSqlServiceImpl {
                 .await
                 .map_err(|e| Status::internal(format!("Error creating catalogs: {e}")))?,
         ));
+
+        let current_schema_udf = create_udf(
+            "current_schema",
+            vec![],
+            Arc::new(DataType::Utf8),
+            Volatility::Immutable,
+            make_scalar_function(current_schema),
+        );
+
+        ctx.register_udf(current_schema_udf);
 
         self.contexts.insert(uuid.clone(), Arc::new(ctx));
         Ok(uuid)
@@ -141,6 +154,10 @@ impl FlightSqlServiceImpl {
         self.results.remove(&handle.to_string());
         Ok(())
     }
+}
+
+fn current_schema(_args: &[ArrayRef]) -> datafusion::common::Result<ArrayRef> {
+    ScalarValue::Utf8(Some("public".to_string())).to_array()
 }
 
 #[tonic::async_trait]
