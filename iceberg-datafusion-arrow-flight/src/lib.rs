@@ -41,7 +41,10 @@ use arrow_flight::{
 use arrow_schema::{DataType, Schema};
 use base64::Engine;
 use dashmap::DashMap;
-use datafusion::logical_expr::{create_udf, LogicalPlan, Volatility};
+use datafusion::common::DFSchema;
+use datafusion::execution::context::SessionState;
+use datafusion::execution::runtime_env::RuntimeEnv;
+use datafusion::logical_expr::{create_udf, EmptyRelation, LogicalPlan, Volatility};
 use datafusion::physical_plan::functions::make_scalar_function;
 use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
 use datafusion::scalar::ScalarValue;
@@ -79,14 +82,20 @@ impl FlightSqlServiceImpl {
         let uuid = Uuid::new_v4().hyphenated().to_string();
         let session_config = SessionConfig::from_env()
             .map_err(|e| Status::internal(format!("Error building plan: {e}")))?
+            .with_create_default_catalog_and_schema(true)
             .with_information_schema(true);
-        let mut ctx = SessionContext::new_with_config(session_config);
-
-        ctx.register_catalog_list(Arc::new(
+        let runtime_env = Arc::new(RuntimeEnv::default());
+        let catalog_list = Arc::new(
             IcebergCatalogList::new(self.catalog_list.clone())
                 .await
                 .map_err(|e| Status::internal(format!("Error creating catalogs: {e}")))?,
-        ));
+        );
+        let state = SessionState::new_with_config_rt_and_catalog_list(
+            session_config,
+            runtime_env,
+            catalog_list,
+        );
+        let ctx = SessionContext::new_with_state(state);
 
         let current_schema_udf = create_udf(
             "current_schema",
@@ -614,11 +623,17 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         let ctx = self.get_ctx(&request)?;
 
-        let plan = ctx
-            .sql(user_query)
-            .await
-            .and_then(|df| df.into_optimized_plan())
-            .map_err(|e| Status::internal(format!("Error building plan: {e}")))?;
+        let plan = if user_query != "rollback" {
+            ctx.sql(user_query)
+                .await
+                .and_then(|df| df.into_optimized_plan())
+                .map_err(|e| Status::internal(format!("Error building plan: {e}")))?
+        } else {
+            LogicalPlan::EmptyRelation(EmptyRelation {
+                produce_one_row: false,
+                schema: Arc::new(DFSchema::empty()),
+            })
+        };
 
         // store a copy of the plan,  it will be used for execution
         let plan_uuid = Uuid::new_v4().hyphenated().to_string();
