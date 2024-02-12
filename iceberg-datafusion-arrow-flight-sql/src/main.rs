@@ -16,6 +16,7 @@
 // under the License.
 
 use arrow_flight::flight_service_server::FlightServiceServer;
+use env_logger::Builder;
 use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
 use log::info;
@@ -46,18 +47,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bucket = env::var("BUCKET");
     let aws_access_key_id = env::var("AWS_ACCESS_KEY_ID");
     let aws_secret_access_key = env::var("AWS_SECRET_ACCESS_KEY");
+    let aws_endpoint = env::var("AWS_ENDPOINT").ok();
 
     let cert_domain = env::var("TLS_DOMAIN");
 
     let object_store = match (bucket, aws_access_key_id, aws_secret_access_key) {
-        (Ok(bucket), Ok(aws_access_key_id), Ok(aws_secret_access_key)) => Arc::new(
-            AmazonS3Builder::from_env()
+        (Ok(bucket), Ok(aws_access_key_id), Ok(aws_secret_access_key)) => {
+            let mut builder = AmazonS3Builder::from_env()
                 .with_bucket_name(bucket)
                 .with_access_key_id(aws_access_key_id)
-                .with_secret_access_key(aws_secret_access_key)
-                .build()?,
-        )
-            as Arc<dyn ObjectStore>,
+                .with_secret_access_key(aws_secret_access_key);
+            if let Some(aws_endpoint) = aws_endpoint {
+                builder = builder.with_endpoint(aws_endpoint);
+            }
+
+            Arc::new(builder.build()?) as Arc<dyn ObjectStore>
+        }
         _ => Arc::new(InMemory::new()),
     };
 
