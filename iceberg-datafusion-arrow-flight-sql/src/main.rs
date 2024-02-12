@@ -16,7 +16,7 @@
 // under the License.
 
 use arrow_flight::flight_service_server::FlightServiceServer;
-use env_logger::Builder;
+
 use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
 use log::info;
