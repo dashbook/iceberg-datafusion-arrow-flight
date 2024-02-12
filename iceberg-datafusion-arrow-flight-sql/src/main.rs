@@ -44,15 +44,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let catalog_url = env::var("CATALOG_URL")?;
 
     let bucket = env::var("BUCKET");
+    let aws_access_key_id = env::var("AWS_ACCESS_KEY_ID");
+    let aws_secret_access_key = env::var("AWS_SECRET_ACCESS_KEY");
+
     let cert_domain = env::var("TLS_DOMAIN");
 
-    let object_store = match bucket {
-        Ok(bucket) => Arc::new(
+    let object_store = match (bucket, aws_access_key_id, aws_secret_access_key) {
+        (Ok(bucket), Ok(aws_access_key_id), Ok(aws_secret_access_key)) => Arc::new(
             AmazonS3Builder::from_env()
                 .with_bucket_name(bucket)
+                .with_access_key_id(aws_access_key_id)
+                .with_secret_access_key(aws_secret_access_key)
                 .build()?,
-        ) as Arc<dyn ObjectStore>,
-        Err(_) => Arc::new(InMemory::new()),
+        )
+            as Arc<dyn ObjectStore>,
+        _ => Arc::new(InMemory::new()),
     };
 
     let catalog_list = Arc::new(SqlCatalogList::new(&catalog_url, object_store).await?);
