@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use arrow::array::ArrayRef;
 use arrow::ipc::writer::IpcWriteOptions;
 use arrow::record_batch::RecordBatch;
 use arrow_flight::encode::FlightDataEncoderBuilder;
@@ -42,10 +41,11 @@ use arrow_schema::{DataType, Schema};
 use base64::Engine;
 use dashmap::DashMap;
 use datafusion::common::DFSchema;
+use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
 use datafusion::execution::runtime_env::RuntimeEnv;
 use datafusion::logical_expr::{create_udf, EmptyRelation, LogicalPlan, Volatility};
-use datafusion::physical_plan::functions::make_scalar_function;
+use datafusion::physical_plan::ColumnarValue;
 use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
 use datafusion::scalar::ScalarValue;
 use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
@@ -97,15 +97,29 @@ impl FlightSqlServiceImpl {
         );
         let ctx = SessionContext::new_with_state(state);
 
-        let current_schema_udf = create_udf(
+        ctx.register_udf(create_udf(
             "current_schema",
             vec![],
             Arc::new(DataType::Utf8),
             Volatility::Immutable,
-            make_scalar_function(current_schema),
-        );
+            Arc::new(|_| {
+                let current_schema = env::var("CURRENT_SCHEMA").ok();
 
-        ctx.register_udf(current_schema_udf);
+                scalar_utf8(current_schema.as_deref().unwrap_or("public"))
+            }),
+        ));
+
+        ctx.register_udf(create_udf(
+            "current_database",
+            vec![],
+            Arc::new(DataType::Utf8),
+            Volatility::Immutable,
+            Arc::new(|_| {
+                let current_database = env::var("CURRENT_DATABASE").ok();
+
+                scalar_utf8(current_database.as_deref().unwrap_or("datafusion"))
+            }),
+        ));
 
         self.contexts.insert(uuid.clone(), Arc::new(ctx));
         Ok(uuid)
@@ -165,8 +179,10 @@ impl FlightSqlServiceImpl {
     }
 }
 
-fn current_schema(_args: &[ArrayRef]) -> datafusion::common::Result<ArrayRef> {
-    ScalarValue::Utf8(Some("public".to_string())).to_array()
+fn scalar_utf8(schema: &str) -> Result<ColumnarValue, DataFusionError> {
+    Ok(ColumnarValue::Scalar(ScalarValue::Utf8(Some(
+        schema.to_string(),
+    ))))
 }
 
 #[tonic::async_trait]
