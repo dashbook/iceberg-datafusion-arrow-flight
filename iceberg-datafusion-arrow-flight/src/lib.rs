@@ -17,7 +17,9 @@
 
 use arrow::ipc::writer::IpcWriteOptions;
 use arrow::record_batch::RecordBatch;
+use arrow_flight::decode::FlightRecordBatchStream;
 use arrow_flight::encode::FlightDataEncoderBuilder;
+use arrow_flight::error::FlightError;
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
 use arrow_flight::sql::server::{FlightSqlService, PeekableFlightDataStream};
@@ -35,25 +37,27 @@ use arrow_flight::sql::{
 };
 use arrow_flight::{
     Action, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse,
-    IpcMessage, SchemaAsIpc, Ticket,
+    IpcMessage, PutResult, SchemaAsIpc, Ticket,
 };
-use arrow_schema::{DataType, Schema};
+use arrow_schema::{ArrowError, DataType, Schema};
 use base64::Engine;
 use dashmap::DashMap;
-use datafusion::common::DFSchema;
+use datafusion::common::cast::as_string_array;
+use datafusion::common::{DFField, DFSchema};
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
 use datafusion::execution::runtime_env::RuntimeEnv;
-use datafusion::logical_expr::{create_udf, EmptyRelation, LogicalPlan, Volatility};
+use datafusion::logical_expr::{create_udf, LogicalPlan, Values, Volatility};
 use datafusion::physical_plan::ColumnarValue;
-use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
+use datafusion::prelude::{DataFrame, Expr, SessionConfig, SessionContext};
 use datafusion::scalar::ScalarValue;
 use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{stream, Stream, StreamExt, TryStreamExt};
 use iceberg_rust::catalog::CatalogList;
 use log::{debug, info};
 use mimalloc::MiMalloc;
 use prost::Message;
+use std::collections::HashMap;
 use std::env;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -598,13 +602,45 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
     async fn do_put_prepared_statement_query(
         &self,
-        _query: CommandPreparedStatementQuery,
-        _request: Request<PeekableFlightDataStream>,
+        query: CommandPreparedStatementQuery,
+        request: Request<PeekableFlightDataStream>,
     ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
         info!("do_put_prepared_statement_query");
-        Err(Status::unimplemented(
-            "Implement do_put_prepared_statement_query",
-        ))
+        let parameters = FlightRecordBatchStream::new_from_flight_data(
+            request.into_inner().map_err(FlightError::from),
+        )
+        .try_collect::<Vec<_>>()
+        .await?;
+
+        let parameters: Vec<ScalarValue> = parameters
+            .into_iter()
+            .map(|record_batch| {
+                Ok(ScalarValue::from(
+                    as_string_array(record_batch.column(0))?.value(0),
+                ))
+            })
+            .collect::<Result<_, DataFusionError>>()
+            .map_err(ArrowError::from)
+            .map_err(FlightError::from)?;
+
+        let handle = std::str::from_utf8(&query.prepared_statement_handle)
+            .map_err(|e| status!("Unable to parse uuid", e))?;
+
+        let prepared_plan = self.get_plan(&handle)?;
+
+        let plan = prepared_plan
+            .with_param_values(parameters)
+            .map_err(ArrowError::from)
+            .map_err(FlightError::from)?;
+
+        *self
+            .statements
+            .get_mut(handle)
+            .ok_or(status!("Handle {} not found", &handle))? = plan;
+
+        Ok(Response::new(Box::pin(stream::once(async {
+            Ok(PutResult::default())
+        }))))
     }
 
     async fn do_put_prepared_statement_update(
@@ -645,9 +681,17 @@ impl FlightSqlService for FlightSqlServiceImpl {
                 .and_then(|df| df.into_optimized_plan())
                 .map_err(|e| Status::internal(format!("Error building plan: {e}")))?
         } else {
-            LogicalPlan::EmptyRelation(EmptyRelation {
-                produce_one_row: false,
-                schema: Arc::new(DFSchema::empty()),
+            LogicalPlan::Values(Values {
+                schema: Arc::new(
+                    DFSchema::new_with_metadata(
+                        vec![DFField::new_unqualified("rollback", DataType::Utf8, false)],
+                        HashMap::new(),
+                    )
+                    .map_err(|e| Status::internal(format!("Error building plan: {e}")))?,
+                ),
+                values: vec![vec![Expr::Literal(ScalarValue::Utf8(Some(
+                    "ROLLBACK".to_owned(),
+                )))]],
             })
         };
 

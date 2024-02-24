@@ -9,9 +9,11 @@ Uses the Sql catalog for iceberg
 - USERNAME - Username to use for basic auth when connecting to the Server
 - PASSWORD - Password to use for the basic auth when connecting to the Server
 - TLS_DOMAIN - Domain to use for the TLS certificate
+- CURRENT_DATABASE - Return value to set for the current_database() function
 
 ### AWS S3 Object Store
 
 - AWS_DEFAULT_REGION
 - AWS_ACCESS_KEY_ID
 - AWS_SECRET_ACCESS_KEY
+- AWS_ENDPOINT
