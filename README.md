@@ -6,8 +6,8 @@ Uses the Sql catalog for iceberg
 
 - CATALOG_URL - Url of the iceberg sql catalog
 - BUCKET - Bucket of the cloud object store
-- USERNAME - Username to use for basic auth when connecting to the Server
-- PASSWORD - Password to use for the basic auth when connecting to the Server
+- FLIGHT_USER - Username to use for basic auth when connecting to the Server
+- FLIGHT_PASSWORD - Password to use for the basic auth when connecting to the Server
 - TLS_DOMAIN - Domain to use for the TLS certificate
 - CURRENT_DATABASE - Return value to set for the current_database() function
 
