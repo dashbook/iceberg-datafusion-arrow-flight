@@ -18,3 +18,4 @@ datafusion = "36.0.0"
 iceberg-rust = { git = "https://www.github.com/jankaul/iceberg-rust" }
 datafusion_iceberg = { git = "https://www.github.com/jankaul/iceberg-rust" }
 thiserror = "1.0"
+tonic = { version = "0.10", features = ["transport", "tls"] }

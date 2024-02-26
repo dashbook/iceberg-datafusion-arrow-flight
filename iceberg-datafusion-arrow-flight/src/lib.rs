@@ -37,7 +37,7 @@ use arrow_flight::sql::{
 };
 use arrow_flight::{
     Action, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse,
-    IpcMessage, PutResult, SchemaAsIpc, Ticket,
+    IpcMessage, SchemaAsIpc, Ticket,
 };
 use arrow_schema::{ArrowError, DataType, Schema};
 use base64::Engine;
@@ -638,9 +638,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .get_mut(handle)
             .ok_or(status!("Handle {} not found", &handle))? = plan;
 
-        Ok(Response::new(Box::pin(stream::once(async {
-            Ok(PutResult::default())
-        }))))
+        Ok(Response::new(Box::pin(stream::empty())))
     }
 
     async fn do_put_prepared_statement_update(

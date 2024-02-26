@@ -48,6 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let aws_access_key_id = env::var("AWS_ACCESS_KEY_ID");
     let aws_secret_access_key = env::var("AWS_SECRET_ACCESS_KEY");
     let aws_endpoint = env::var("AWS_ENDPOINT").ok();
+    let aws_allow_http = env::var("AWS_ALLOW_HTTP").ok();
 
     let cert_domain = env::var("TLS_DOMAIN");
 
@@ -59,6 +60,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .with_secret_access_key(aws_secret_access_key);
             if let Some(aws_endpoint) = aws_endpoint {
                 builder = builder.with_endpoint(aws_endpoint);
+            }
+            if let Some("TRUE") = aws_allow_http.as_deref() {
+                builder = builder.with_allow_http(true);
             }
 
             Arc::new(builder.build()?) as Arc<dyn ObjectStore>
