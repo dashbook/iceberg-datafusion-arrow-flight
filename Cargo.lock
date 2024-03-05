@@ -1798,24 +1798,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "iceberg-catalog-sql"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9936418142f7cef5386f0f8f405c21b88d277cc6e78d73124048382109470909"
-dependencies = [
- "async-trait",
- "dashmap",
- "futures",
- "iceberg-rust",
- "object_store",
- "serde_json",
- "sqlx",
- "thiserror",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "iceberg-datafusion-arrow-flight"
 version = "0.1.0"
 dependencies = [
@@ -1843,9 +1825,9 @@ dependencies = [
  "arrow-flight",
  "datafusion_iceberg",
  "env_logger",
- "iceberg-catalog-sql",
  "iceberg-datafusion-arrow-flight",
  "iceberg-rust",
+ "iceberg-sql-catalog",
  "log",
  "object_store",
  "rcgen",
@@ -1902,6 +1884,24 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_repr",
+ "thiserror",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "iceberg-sql-catalog"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29b7584070f3ed1c518e0daedfee860562b5313d28a18984fbc9769c33d6e828"
+dependencies = [
+ "async-trait",
+ "dashmap",
+ "futures",
+ "iceberg-rust",
+ "object_store",
+ "serde_json",
+ "sqlx",
  "thiserror",
  "url",
  "uuid",

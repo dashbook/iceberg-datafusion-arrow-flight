@@ -17,8 +17,8 @@
 
 use arrow_flight::flight_service_server::FlightServiceServer;
 
-use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_datafusion_arrow_flight::FlightSqlServiceImpl;
+use iceberg_sql_catalog::SqlCatalogList;
 use log::info;
 use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use std::{env, sync::Arc};

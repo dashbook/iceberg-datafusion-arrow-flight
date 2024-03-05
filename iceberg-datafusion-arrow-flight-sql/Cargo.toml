@@ -15,5 +15,5 @@ log = "0.4.20"
 env_logger = "0.10.1"
 iceberg-datafusion-arrow-flight = { path = "../iceberg-datafusion-arrow-flight/" }
 tokio = "1"
-iceberg-catalog-sql = "0.2"
+iceberg-sql-catalog = "0.2"
 rcgen = "0.12.0"
