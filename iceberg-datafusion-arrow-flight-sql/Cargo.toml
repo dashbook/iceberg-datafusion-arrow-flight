@@ -17,3 +17,4 @@ iceberg-datafusion-arrow-flight = { path = "../iceberg-datafusion-arrow-flight/"
 tokio = "1"
 iceberg-sql-catalog = "0.3"
 rcgen = "0.12.0"
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
