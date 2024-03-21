@@ -4,6 +4,8 @@ members = [
   "iceberg-datafusion-arrow-flight-sql",
 ]
 
+resolver = "2"
+
 [workspace.dependencies]
 object_store = { version = "0.9", features = ["aws", "gcp"] }
 serde = "^1.0"
@@ -15,7 +17,7 @@ arrow = "50.0.0"
 arrow-flight = { version = "50.0.0", features = ["flight-sql-experimental"] }
 arrow-schema = "50.0.0"
 datafusion = "36.0.0"
-iceberg-rust = "0.2.0"
-datafusion_iceberg = "0.2.0"
+iceberg-rust = "0.3"
+datafusion_iceberg = "0.3"
 thiserror = "1.0"
 tonic = { version = "0.10", features = ["transport", "tls"] }
