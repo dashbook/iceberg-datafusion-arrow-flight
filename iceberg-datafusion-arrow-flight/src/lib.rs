@@ -39,11 +39,11 @@ use arrow_flight::{
     Action, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse,
     IpcMessage, SchemaAsIpc, Ticket,
 };
-use arrow_schema::{ArrowError, DataType, Schema};
+use arrow_schema::{ArrowError, DataType, Field, Schema};
 use base64::Engine;
 use dashmap::DashMap;
 use datafusion::common::cast::as_string_array;
-use datafusion::common::{DFField, DFSchema};
+use datafusion::common::DFSchema;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
 use datafusion::execution::runtime_env::RuntimeEnv;
@@ -57,7 +57,6 @@ use iceberg_rust::catalog::CatalogList;
 use log::{debug, info};
 use mimalloc::MiMalloc;
 use prost::Message;
-use std::collections::HashMap;
 use std::env;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -354,13 +353,9 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let endpoint = FlightEndpoint {
             ticket: Some(ticket),
             location: vec![],
+            expiration_time: None,
+            app_metadata: Vec::new().into(),
         };
-        let endpoints = vec![endpoint];
-
-        let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
-            .try_into()
-            .map_err(|e| status!("Unable to serialize schema", e))?;
-        let IpcMessage(schema_bytes) = message;
 
         let flight_desc = FlightDescriptor {
             r#type: DescriptorType::Cmd.into(),
@@ -369,14 +364,14 @@ impl FlightSqlService for FlightSqlServiceImpl {
         };
         // send -1 for total_records and total_bytes instead of iterating over all the
         // batches to get num_rows() and total byte size.
-        let info = FlightInfo {
-            schema: schema_bytes,
-            flight_descriptor: Some(flight_desc),
-            endpoint: endpoints,
-            total_records: -1_i64,
-            total_bytes: -1_i64,
-            ordered: false,
-        };
+
+        let info = FlightInfo::new()
+            .try_with_schema(&schema)
+            .map_err(|e| status!("Unable to serialize schema", e))?
+            .with_descriptor(flight_desc)
+            .with_endpoint(endpoint)
+            .with_ordered(false);
+
         let resp = Response::new(info);
         Ok(resp)
     }
@@ -681,10 +676,11 @@ impl FlightSqlService for FlightSqlServiceImpl {
         } else {
             LogicalPlan::Values(Values {
                 schema: Arc::new(
-                    DFSchema::new_with_metadata(
-                        vec![DFField::new_unqualified("rollback", DataType::Utf8, false)],
-                        HashMap::new(),
-                    )
+                    DFSchema::try_from(Schema::new(vec![Field::new(
+                        "rollback",
+                        DataType::Utf8,
+                        false,
+                    )]))
                     .map_err(|e| Status::internal(format!("Error building plan: {e}")))?,
                 ),
                 values: vec![vec![Expr::Literal(ScalarValue::Utf8(Some(
