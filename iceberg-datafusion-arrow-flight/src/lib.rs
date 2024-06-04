@@ -47,7 +47,7 @@ use datafusion::common::DFSchema;
 use datafusion::error::DataFusionError;
 use datafusion::execution::context::SessionState;
 use datafusion::execution::runtime_env::RuntimeEnv;
-use datafusion::logical_expr::{create_udf, LogicalPlan, Values, Volatility};
+use datafusion::logical_expr::{LogicalPlan, Values, Volatility};
 use datafusion::physical_plan::ColumnarValue;
 use datafusion::prelude::{DataFrame, Expr, SessionConfig, SessionContext};
 use datafusion::scalar::ScalarValue;
@@ -62,7 +62,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tonic::metadata::MetadataValue;
 use tonic::{Request, Response, Status, Streaming};
+use udf::create_no_arg_udf;
 use uuid::Uuid;
+
+mod udf;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -100,7 +103,7 @@ impl FlightSqlServiceImpl {
         );
         let ctx = SessionContext::new_with_state(state);
 
-        ctx.register_udf(create_udf(
+        ctx.register_udf(create_no_arg_udf(
             "current_schema",
             vec![],
             Arc::new(DataType::Utf8),
@@ -112,7 +115,7 @@ impl FlightSqlServiceImpl {
             }),
         ));
 
-        ctx.register_udf(create_udf(
+        ctx.register_udf(create_no_arg_udf(
             "current_database",
             vec![],
             Arc::new(DataType::Utf8),
