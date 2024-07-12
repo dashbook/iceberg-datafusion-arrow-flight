@@ -32,8 +32,8 @@ use arrow_flight::sql::{
     CommandGetCrossReference, CommandGetDbSchemas, CommandGetExportedKeys, CommandGetImportedKeys,
     CommandGetPrimaryKeys, CommandGetSqlInfo, CommandGetTableTypes, CommandGetTables,
     CommandGetXdbcTypeInfo, CommandPreparedStatementQuery, CommandPreparedStatementUpdate,
-    CommandStatementQuery, CommandStatementSubstraitPlan, CommandStatementUpdate, ProstMessageExt,
-    SqlInfo, TicketStatementQuery,
+    CommandStatementQuery, CommandStatementSubstraitPlan, CommandStatementUpdate,
+    DoPutPreparedStatementResult, ProstMessageExt, SqlInfo, TicketStatementQuery,
 };
 use arrow_flight::{
     Action, FlightDescriptor, FlightEndpoint, FlightInfo, HandshakeRequest, HandshakeResponse,
@@ -52,7 +52,7 @@ use datafusion::physical_plan::ColumnarValue;
 use datafusion::prelude::{DataFrame, Expr, SessionConfig, SessionContext};
 use datafusion::scalar::ScalarValue;
 use datafusion_iceberg::catalog::catalog_list::IcebergCatalogList;
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt, TryStreamExt};
 use iceberg_rust::catalog::CatalogList;
 use log::{debug, info};
 use mimalloc::MiMalloc;
@@ -602,7 +602,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementQuery,
         request: Request<PeekableFlightDataStream>,
-    ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
+    ) -> Result<DoPutPreparedStatementResult, Status> {
         info!("do_put_prepared_statement_query");
         let parameters = FlightRecordBatchStream::new_from_flight_data(
             request.into_inner().map_err(FlightError::from),
@@ -622,7 +622,8 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .map_err(FlightError::from)?;
 
         let handle = std::str::from_utf8(&query.prepared_statement_handle)
-            .map_err(|e| status!("Unable to parse uuid", e))?;
+            .map_err(|e| status!("Unable to parse uuid", e))?
+            .to_string();
 
         let prepared_plan = self.get_plan(&handle)?;
 
@@ -633,10 +634,12 @@ impl FlightSqlService for FlightSqlServiceImpl {
 
         *self
             .statements
-            .get_mut(handle)
+            .get_mut(&handle)
             .ok_or(status!("Handle {} not found", &handle))? = plan;
 
-        Ok(Response::new(Box::pin(stream::empty())))
+        Ok(DoPutPreparedStatementResult {
+            prepared_statement_handle: Some(handle.into_bytes().into()),
+        })
     }
 
     async fn do_put_prepared_statement_update(
