@@ -2,6 +2,7 @@
 members = [
   "iceberg-datafusion-arrow-flight",
   "iceberg-datafusion-arrow-flight-sql",
+  "iceberg-datafusion-arrow-flight-rest",
 ]
 
 resolver = "2"
